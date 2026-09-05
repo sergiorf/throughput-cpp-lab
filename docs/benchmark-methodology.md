@@ -1,5 +1,7 @@
 # Benchmark Methodology
 
+This page defines the measurement boundary. For the broader system structure, see [Software architecture](software-architecture.md). For build, test, and scenario commands, see [Testing and verification](testing.md).
+
 The measured region begins after deterministic encoded input batches and immutable reference data have been constructed.
 
 Measured work:
@@ -38,4 +40,3 @@ Future benchmark work will add repeated samples, median, p95, p99, peak resident
 ## Validity Notes
 
 Every stage must process identical encoded inputs and produce equivalent checksums. Allocation counters are process-local and intended for relative comparison inside one executable run. If instrumentation materially changes timing, instrumented and non-instrumented timings must be reported separately.
-

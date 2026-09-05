@@ -1,0 +1,11 @@
+flowchart TB
+    app[Application lifetime<br/>reference data]
+    input[Input-buffer lifetime<br/>encoded bytes]
+    temp[Temporary lifetime<br/>parse and validation scratch]
+    batch[Batch lifetime<br/>normalized and audit outputs]
+    output[Output lifetime<br/>surviving committed records]
+
+    app --> temp
+    input --> temp
+    temp --> batch
+    batch --> output

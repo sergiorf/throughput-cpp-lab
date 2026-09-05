@@ -1,0 +1,13 @@
+flowchart TB
+    batch[Encoded business document batch]
+    decode[Decode]
+    validate[Validate]
+    normalize[Normalize]
+    enrich[Enrich from immutable reference data]
+    normalized[Normalized records]
+    audit[Audit records]
+    checksum[Stable checksum]
+
+    batch --> decode --> validate --> normalize --> enrich
+    enrich --> normalized --> checksum
+    enrich --> audit --> checksum

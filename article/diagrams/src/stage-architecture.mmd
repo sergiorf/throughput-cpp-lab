@@ -1,0 +1,26 @@
+flowchart TB
+    input[EncodedBatch]
+    ref[ReferenceData]
+    baseline[baseline]
+    reserved[reserved]
+    pmr[pmr]
+    arena[arena]
+    semantic[SemanticResult<br/>counts and checksum]
+    tests[CTest equivalence tests]
+    scenario[Scenario runner]
+
+    input --> baseline
+    input --> reserved
+    input --> pmr
+    input --> arena
+    ref --> baseline
+    ref --> reserved
+    ref --> pmr
+    ref --> arena
+
+    baseline --> semantic
+    reserved --> semantic
+    pmr --> semantic
+    arena --> semantic
+    semantic --> tests
+    semantic --> scenario

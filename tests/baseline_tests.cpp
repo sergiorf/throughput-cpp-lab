@@ -4,6 +4,7 @@
 #include "throughput/instrumentation.hpp"
 #include "throughput/pipeline_baseline.hpp"
 #include "throughput/reference_data.hpp"
+#include "throughput/stages.hpp"
 
 namespace {
 
@@ -56,6 +57,27 @@ THROUGHPUT_TEST(baseline_checksum_is_stable)
     THROUGHPUT_REQUIRE_EQ(first.checksum, second.checksum);
 }
 
+THROUGHPUT_TEST(stage_checksums_are_equivalent)
+{
+    const auto reference = throughput::ReferenceData::make_default();
+    const auto batch = throughput::generate_batch(small_config());
+
+    const auto baseline = throughput::stages::baseline(batch, reference);
+    const auto reserved = throughput::stages::reserved(batch, reference);
+    const auto pmr = throughput::stages::pmr(batch, reference);
+    const auto arena = throughput::stages::arena(batch, reference);
+
+    THROUGHPUT_REQUIRE_EQ(reserved.normalized_records, baseline.normalized_records);
+    THROUGHPUT_REQUIRE_EQ(reserved.audit_records, baseline.audit_records);
+    THROUGHPUT_REQUIRE_EQ(reserved.checksum, baseline.checksum);
+    THROUGHPUT_REQUIRE_EQ(pmr.normalized_records, baseline.normalized_records);
+    THROUGHPUT_REQUIRE_EQ(pmr.audit_records, baseline.audit_records);
+    THROUGHPUT_REQUIRE_EQ(pmr.checksum, baseline.checksum);
+    THROUGHPUT_REQUIRE_EQ(arena.normalized_records, baseline.normalized_records);
+    THROUGHPUT_REQUIRE_EQ(arena.audit_records, baseline.audit_records);
+    THROUGHPUT_REQUIRE_EQ(arena.checksum, baseline.checksum);
+}
+
 THROUGHPUT_TEST(allocation_instrumentation_observes_baseline_work)
 {
     const auto reference = throughput::ReferenceData::make_default();
@@ -70,4 +92,3 @@ THROUGHPUT_TEST(allocation_instrumentation_observes_baseline_work)
     THROUGHPUT_REQUIRE(allocations.allocations > 0);
     THROUGHPUT_REQUIRE(allocations.allocated_bytes > 0);
 }
-

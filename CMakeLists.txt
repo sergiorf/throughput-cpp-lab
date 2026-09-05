@@ -14,7 +14,9 @@ add_library(throughput_core
     src/generator.cpp
     src/instrumentation.cpp
     src/pipeline_baseline.cpp
+    src/pipeline_reserved.cpp
     src/reference_data.cpp
+    src/stages.cpp
 )
 
 target_include_directories(throughput_core PUBLIC include)
@@ -42,4 +44,3 @@ set_target_properties(throughput_scenario throughput_tests PROPERTIES
 
 enable_testing()
 add_test(NAME throughput_tests COMMAND throughput_tests)
-

@@ -36,6 +36,14 @@ Visual Studio preset:
 .\build\msvc\bin\Release\throughput_scenario.exe
 ```
 
+## Documentation
+
+- [Domain model](docs/domain.md) explains the business document pipeline, the Flink-like boundary, reference data, and lifetime model.
+- [Software architecture](docs/software-architecture.md) explains the semantic contract, stage structure, measured region, and benchmark integrity boundaries.
+- [Testing and verification](docs/testing.md) explains how to build, test, run the scenario, and interpret failures.
+- [Benchmark methodology](docs/benchmark-methodology.md) defines measured and unmeasured work.
+- [Results](docs/results.md) is reserved for accepted evidence.
+
 ## Current Status
 
 Implemented:
@@ -43,8 +51,10 @@ Implemented:
 - deterministic workload generation;
 - immutable reference data;
 - idiomatic C++ baseline;
+- semantic result contract for cross-stage equivalence;
+- baseline, reserved, PMR, and custom arena stage entry points;
 - stable checksums;
 - allocation instrumentation;
-- baseline tests.
+- stage equivalence tests.
 
-Later stages will cover copy reduction, reuse, data layout, `std::pmr`, and a custom arena only if the evidence justifies it.
+Later stages can cover copy reduction, reuse, and data layout without changing the stable business semantics.
