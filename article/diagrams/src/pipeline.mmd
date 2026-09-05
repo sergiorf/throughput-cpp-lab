@@ -1,0 +1,11 @@
+flowchart LR
+    input[Encoded batch] --> decode[Decode]
+    decode --> validate[Validate]
+    validate --> normalize[Normalize]
+    normalize --> enrich[Reference enrichment]
+    enrich --> output[Normalized records]
+    enrich --> audit[Audit records]
+    output --> checksum[Batch checksum]
+    audit --> checksum
+    checksum --> commit[Commit boundary]
+
