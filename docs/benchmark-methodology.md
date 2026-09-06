@@ -35,7 +35,7 @@ The initial scenario runner reports:
 - audit output count;
 - checksum.
 
-The separated financial benchmarks report the same core fields plus solution-specific coordination observations. `financial_par_benchmark` additionally reports worker count, queue capacity, maximum queue occupancy, producer waits, consumer waits, and accumulated wait time.
+The separated financial benchmarks report the same core fields plus solution-specific coordination observations. `financial_par_benchmark` additionally reports worker count, queue capacity, maximum queue occupancy, producer waits, consumer waits, and accumulated wait time. `financial_tp_benchmark` reports those fields plus batch size and allocation mode so batch transfer and PMR scratch allocation can be varied without changing business semantics.
 
 Future benchmark work will add repeated samples, median, p95, p99, peak resident memory where reliable, retained memory after reset, worker utilization, and workload matrix reporting.
 

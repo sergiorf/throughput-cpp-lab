@@ -8,12 +8,12 @@ The current refactor keeps the three comparison solutions separated under `solut
 
 | Concern | Sequential | Parallel | Throughput-oriented |
 | --- | --- | --- | --- |
-| Work unit | One record | One record | Planned batch |
-| Allocation | General heap | General heap | Planned worker-local reusable memory |
-| Coordination | None | Bounded per-record queue | Planned amortized batch queueing |
-| Representation | Owning objects | Owning objects | Planned hybrid, lifetime-oriented layout |
-| Reference data | Immutable | Shared immutable | Planned cache-conscious immutable lookup |
-| I/O | Record-oriented payloads | Record-oriented payloads | Planned buffered or batched boundary |
+| Work unit | One record | One record | Batch |
+| Allocation | General heap | General heap | Worker-local PMR scratch, canonical owning output |
+| Coordination | None | Bounded per-record queue | Bounded batch queue |
+| Representation | Owning objects | Owning objects | Borrowed input ranges, batch-local normalized text |
+| Reference data | Immutable | Shared immutable | Shared immutable |
+| I/O | Record-oriented payloads | Record-oriented payloads | Batched in-memory processing boundary |
 
 ## Build Instructions
 
@@ -56,6 +56,8 @@ Default preset:
 .\build\default\bin\financial_seq_benchmark.exe 10000
 .\build\default\bin\financial_par.exe
 .\build\default\bin\financial_par_benchmark.exe 10000 4 256
+.\build\default\bin\financial_tp.exe
+.\build\default\bin\financial_tp_benchmark.exe 10000 4 32 64 arena
 ```
 
 Visual Studio preset:
@@ -65,6 +67,8 @@ Visual Studio preset:
 .\build\msvc\bin\Release\financial_seq_benchmark.exe 10000
 .\build\msvc\bin\Release\financial_par.exe
 .\build\msvc\bin\Release\financial_par_benchmark.exe 10000 4 256
+.\build\msvc\bin\Release\financial_tp.exe
+.\build\msvc\bin\Release\financial_tp_benchmark.exe 10000 4 32 64 arena
 ```
 
 ## Documentation
@@ -84,6 +88,7 @@ Implemented:
 - shared financial wire format, deterministic workload generation, reference fixtures, checksums, and allocation instrumentation;
 - `solutions/01_sequential`, a conventional owning record-at-a-time pipeline;
 - `solutions/02_parallel`, a conventional worker-thread pipeline with bounded queue backpressure and order-preserving output;
-- equivalence tests showing the parallel solution produces the same canonical records and checksum as the sequential solution.
+- `solutions/03_throughput`, a batch-oriented worker pipeline with borrowed input ranges and worker-local PMR scratch state;
+- equivalence tests showing the parallel and throughput-oriented solutions produce the same canonical records and checksum as the sequential solution.
 
-The throughput-oriented batch architecture and socket boundary remain to be implemented. Final performance claims are intentionally deferred until repeated release-mode measurements are collected.
+The socket boundary remains to be implemented. Final performance claims are intentionally deferred until repeated release-mode measurements are collected.

@@ -115,3 +115,34 @@ if(THROUGHPUT_ENABLE_WARNINGS)
 endif()
 
 add_test(NAME financial_par_tests COMMAND financial_par_tests)
+
+add_library(financial_tp_lib
+    solutions/03_throughput/src/pipeline.cpp
+)
+target_include_directories(financial_tp_lib PUBLIC solutions/03_throughput/include)
+target_link_libraries(financial_tp_lib PUBLIC financial_common)
+
+add_executable(financial_tp solutions/03_throughput/src/main.cpp)
+target_link_libraries(financial_tp PRIVATE financial_tp_lib)
+
+add_executable(financial_tp_benchmark solutions/03_throughput/benchmarks/throughput_benchmark.cpp)
+target_link_libraries(financial_tp_benchmark PRIVATE financial_tp_lib)
+
+add_executable(financial_tp_tests solutions/03_throughput/tests/throughput_tests.cpp)
+target_link_libraries(financial_tp_tests PRIVATE financial_tp_lib financial_seq_lib)
+
+set_target_properties(financial_tp financial_tp_benchmark financial_tp_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+if(THROUGHPUT_ENABLE_WARNINGS)
+    foreach(target financial_tp_lib financial_tp financial_tp_benchmark financial_tp_tests)
+        if(MSVC)
+            target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc)
+        else()
+            target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+        endif()
+    endforeach()
+endif()
+
+add_test(NAME financial_tp_tests COMMAND financial_tp_tests)
