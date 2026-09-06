@@ -8,42 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(THROUGHPUT_ENABLE_WARNINGS "Enable project warnings" ON)
 
-add_library(throughput_core
-    src/checksum.cpp
-    src/domain.cpp
-    src/generator.cpp
-    src/instrumentation.cpp
-    src/pipeline_baseline.cpp
-    src/pipeline_reserved.cpp
-    src/reference_data.cpp
-    src/stages.cpp
-)
-
-target_include_directories(throughput_core PUBLIC include)
-
-if(THROUGHPUT_ENABLE_WARNINGS)
-    if(MSVC)
-        target_compile_options(throughput_core PRIVATE /W4 /permissive- /EHsc)
-    else()
-        target_compile_options(throughput_core PRIVATE -Wall -Wextra -Wpedantic)
-    endif()
-endif()
-
-add_executable(throughput_scenario benchmarks/scenarios/throughput_scenario.cpp)
-target_link_libraries(throughput_scenario PRIVATE throughput_core)
-
-add_executable(throughput_tests
-    tests/baseline_tests.cpp
-    tests/test_main.cpp
-)
-target_link_libraries(throughput_tests PRIVATE throughput_core)
-
-set_target_properties(throughput_scenario throughput_tests PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
-
 enable_testing()
-add_test(NAME throughput_tests COMMAND throughput_tests)
 
 add_library(financial_common
     common/src/checksum.cpp
@@ -54,27 +19,27 @@ add_library(financial_common
 )
 target_include_directories(financial_common PUBLIC common/include)
 
-add_library(financial_seq_lib
-    solutions/01_sequential/src/pipeline.cpp
+add_library(financial_oracle_lib
+    reference/sequential_oracle/src/pipeline.cpp
 )
-target_include_directories(financial_seq_lib PUBLIC solutions/01_sequential/include)
-target_link_libraries(financial_seq_lib PUBLIC financial_common)
+target_include_directories(financial_oracle_lib PUBLIC reference/sequential_oracle/include)
+target_link_libraries(financial_oracle_lib PUBLIC financial_common)
 
-add_executable(financial_seq solutions/01_sequential/src/main.cpp)
-target_link_libraries(financial_seq PRIVATE financial_seq_lib)
+add_executable(financial_oracle reference/sequential_oracle/src/main.cpp)
+target_link_libraries(financial_oracle PRIVATE financial_oracle_lib)
 
-add_executable(financial_seq_benchmark solutions/01_sequential/benchmarks/sequential_benchmark.cpp)
-target_link_libraries(financial_seq_benchmark PRIVATE financial_seq_lib)
+add_executable(financial_oracle_benchmark reference/sequential_oracle/benchmarks/oracle_benchmark.cpp)
+target_link_libraries(financial_oracle_benchmark PRIVATE financial_oracle_lib)
 
-add_executable(financial_seq_tests solutions/01_sequential/tests/sequential_tests.cpp)
-target_link_libraries(financial_seq_tests PRIVATE financial_seq_lib)
+add_executable(financial_oracle_tests reference/sequential_oracle/tests/oracle_tests.cpp)
+target_link_libraries(financial_oracle_tests PRIVATE financial_oracle_lib)
 
-set_target_properties(financial_seq financial_seq_benchmark financial_seq_tests PROPERTIES
+set_target_properties(financial_oracle financial_oracle_benchmark financial_oracle_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 if(THROUGHPUT_ENABLE_WARNINGS)
-    foreach(target financial_common financial_seq_lib financial_seq financial_seq_benchmark financial_seq_tests)
+    foreach(target financial_common financial_oracle_lib financial_oracle financial_oracle_benchmark financial_oracle_tests)
         if(MSVC)
             target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc)
         else()
@@ -83,29 +48,29 @@ if(THROUGHPUT_ENABLE_WARNINGS)
     endforeach()
 endif()
 
-add_test(NAME financial_seq_tests COMMAND financial_seq_tests)
+add_test(NAME financial_oracle_tests COMMAND financial_oracle_tests)
 
-add_library(financial_par_lib
-    solutions/02_parallel/src/pipeline.cpp
+add_library(financial_parallel_batched_lib
+    solutions/01_parallel_batched/src/pipeline.cpp
 )
-target_include_directories(financial_par_lib PUBLIC solutions/02_parallel/include)
-target_link_libraries(financial_par_lib PUBLIC financial_common)
+target_include_directories(financial_parallel_batched_lib PUBLIC solutions/01_parallel_batched/include)
+target_link_libraries(financial_parallel_batched_lib PUBLIC financial_common)
 
-add_executable(financial_par solutions/02_parallel/src/main.cpp)
-target_link_libraries(financial_par PRIVATE financial_par_lib)
+add_executable(financial_parallel_batched solutions/01_parallel_batched/src/main.cpp)
+target_link_libraries(financial_parallel_batched PRIVATE financial_parallel_batched_lib)
 
-add_executable(financial_par_benchmark solutions/02_parallel/benchmarks/parallel_benchmark.cpp)
-target_link_libraries(financial_par_benchmark PRIVATE financial_par_lib)
+add_executable(financial_parallel_batched_benchmark solutions/01_parallel_batched/benchmarks/parallel_batched_benchmark.cpp)
+target_link_libraries(financial_parallel_batched_benchmark PRIVATE financial_parallel_batched_lib)
 
-add_executable(financial_par_tests solutions/02_parallel/tests/parallel_tests.cpp)
-target_link_libraries(financial_par_tests PRIVATE financial_par_lib financial_seq_lib)
+add_executable(financial_parallel_batched_tests solutions/01_parallel_batched/tests/parallel_batched_tests.cpp)
+target_link_libraries(financial_parallel_batched_tests PRIVATE financial_parallel_batched_lib financial_oracle_lib)
 
-set_target_properties(financial_par financial_par_benchmark financial_par_tests PROPERTIES
+set_target_properties(financial_parallel_batched financial_parallel_batched_benchmark financial_parallel_batched_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 if(THROUGHPUT_ENABLE_WARNINGS)
-    foreach(target financial_par_lib financial_par financial_par_benchmark financial_par_tests)
+    foreach(target financial_parallel_batched_lib financial_parallel_batched financial_parallel_batched_benchmark financial_parallel_batched_tests)
         if(MSVC)
             target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc)
         else()
@@ -114,29 +79,29 @@ if(THROUGHPUT_ENABLE_WARNINGS)
     endforeach()
 endif()
 
-add_test(NAME financial_par_tests COMMAND financial_par_tests)
+add_test(NAME financial_parallel_batched_tests COMMAND financial_parallel_batched_tests)
 
-add_library(financial_tp_lib
-    solutions/03_throughput/src/pipeline.cpp
+add_library(financial_lifetime_optimized_lib
+    solutions/02_lifetime_optimized/src/pipeline.cpp
 )
-target_include_directories(financial_tp_lib PUBLIC solutions/03_throughput/include)
-target_link_libraries(financial_tp_lib PUBLIC financial_common)
+target_include_directories(financial_lifetime_optimized_lib PUBLIC solutions/02_lifetime_optimized/include)
+target_link_libraries(financial_lifetime_optimized_lib PUBLIC financial_common)
 
-add_executable(financial_tp solutions/03_throughput/src/main.cpp)
-target_link_libraries(financial_tp PRIVATE financial_tp_lib)
+add_executable(financial_lifetime_optimized solutions/02_lifetime_optimized/src/main.cpp)
+target_link_libraries(financial_lifetime_optimized PRIVATE financial_lifetime_optimized_lib)
 
-add_executable(financial_tp_benchmark solutions/03_throughput/benchmarks/throughput_benchmark.cpp)
-target_link_libraries(financial_tp_benchmark PRIVATE financial_tp_lib)
+add_executable(financial_lifetime_optimized_benchmark solutions/02_lifetime_optimized/benchmarks/lifetime_optimized_benchmark.cpp)
+target_link_libraries(financial_lifetime_optimized_benchmark PRIVATE financial_lifetime_optimized_lib)
 
-add_executable(financial_tp_tests solutions/03_throughput/tests/throughput_tests.cpp)
-target_link_libraries(financial_tp_tests PRIVATE financial_tp_lib financial_seq_lib)
+add_executable(financial_lifetime_optimized_tests solutions/02_lifetime_optimized/tests/lifetime_optimized_tests.cpp)
+target_link_libraries(financial_lifetime_optimized_tests PRIVATE financial_lifetime_optimized_lib financial_oracle_lib)
 
-set_target_properties(financial_tp financial_tp_benchmark financial_tp_tests PROPERTIES
+set_target_properties(financial_lifetime_optimized financial_lifetime_optimized_benchmark financial_lifetime_optimized_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
 if(THROUGHPUT_ENABLE_WARNINGS)
-    foreach(target financial_tp_lib financial_tp financial_tp_benchmark financial_tp_tests)
+    foreach(target financial_lifetime_optimized_lib financial_lifetime_optimized financial_lifetime_optimized_benchmark financial_lifetime_optimized_tests)
         if(MSVC)
             target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc)
         else()
@@ -145,4 +110,4 @@ if(THROUGHPUT_ENABLE_WARNINGS)
     endforeach()
 endif()
 
-add_test(NAME financial_tp_tests COMMAND financial_tp_tests)
+add_test(NAME financial_lifetime_optimized_tests COMMAND financial_lifetime_optimized_tests)

@@ -1,116 +1,75 @@
 # Software Architecture
 
-The repository is organized around an article-friendly separation: stable semantics, stage implementations, measurement harnesses, and evidence. The code should make it difficult to change business behaviour accidentally while making it easy to compare memory and representation choices.
+The repository is organized around a correctness oracle and two independently browsable financial-record implementations. Shared code exists only for contracts that make comparison fair: encoded input, deterministic workload generation, immutable reference data, stable checksums, benchmark metric fields, and allocation instrumentation.
 
 ## Source Layout
 
 ```mermaid
 flowchart TB
-    include[include/throughput]
-    src[src]
-    tests[tests]
-    benches[benchmarks/scenarios]
+    common[common/include/financial/common]
+    oracle[reference/sequential_oracle]
+    batched[solutions/01_parallel_batched]
+    optimized[solutions/02_lifetime_optimized]
     docs[docs]
     article[article]
 
-    include --> semantic[semantic_result.hpp<br/>stages.hpp<br/>domain/reference/generator headers]
-    src --> core[domain.cpp<br/>reference_data.cpp<br/>generator.cpp<br/>checksum.cpp<br/>instrumentation.cpp]
-    src --> stages[pipeline_baseline.cpp<br/>pipeline_reserved.cpp<br/>stages.cpp<br/>pipeline_shared.hpp]
-    tests --> equivalence[determinism, baseline, allocation, stage equivalence tests]
-    benches --> scenario[throughput_scenario.cpp]
-    docs --> method[architecture, domain, methodology, testing, results]
+    common --> contracts[wire format<br/>reference data<br/>generator<br/>checksum<br/>instrumentation]
+    oracle --> oracle_arch[sequential correctness oracle]
+    batched --> batched_arch[parallel batched baseline<br/>owning records]
+    optimized --> optimized_arch[lifetime optimized pipeline<br/>borrowed ranges and scratch]
+    docs --> method[architecture, domain, testing, methodology, results]
     article --> draft[article draft and diagram sources]
 ```
 
-## Layering
+The processing pipeline, queue abstraction, worker architecture, internal record representation, and memory strategy are not shared by the two visible solutions. Those are the design choices the project compares.
 
-The stable layer defines what the pipeline means. Stage implementations define how that work is represented and allocated. The scenario runner and tests consume stage entry points through the semantic contract.
+## Shared Contract
 
-```mermaid
-flowchart TB
-    workload[Deterministic workload generation]
-    reference[Immutable reference data]
-    contract[SemanticResult contract]
-
-    baseline[Stage: baseline]
-    reserved[Stage: reserved]
-    pmr[Stage: pmr]
-    arena[Stage: arena]
-
-    tests[CTest equivalence tests]
-    scenario[Scenario measurement runner]
-    evidence[Docs and article evidence]
-
-    workload --> baseline
-    workload --> reserved
-    workload --> pmr
-    workload --> arena
-    reference --> baseline
-    reference --> reserved
-    reference --> pmr
-    reference --> arena
-
-    baseline --> contract
-    reserved --> contract
-    pmr --> contract
-    arena --> contract
-
-    contract --> tests
-    contract --> scenario
-    tests --> evidence
-    scenario --> evidence
-```
-
-## Stage Contract
-
-Each stage accepts the same encoded batch representation and immutable reference data. It may use different internal containers, allocation resources, or temporary representations, but it must emit behaviourally equivalent observable results.
+Each implementation accepts the same `std::vector<financial::common::EncodedRecord>`, reads the same immutable `financial::common::ReferenceData`, and returns canonical records plus a stable checksum. Equivalence is defined by `financial::common::CanonicalRecord`, not by internal objects.
 
 ```mermaid
 flowchart LR
-    input[EncodedBatch]
-    ref[ReferenceData]
-    input --> stage[Stage implementation]
-    ref --> stage
-    stage --> result[SemanticResult]
-    result --> counts[normalized_records<br/>audit_records]
-    result --> checksum[stable checksum]
+    input[Encoded financial records]
+    ref[Immutable reference data]
+    impl[Implementation]
+    output[Canonical records]
+    checksum[Stable checksum]
+
+    input --> impl
+    ref --> impl
+    impl --> output
+    output --> checksum
 ```
 
-The project currently keeps the original `PipelineResult` for the owning baseline API. The cross-stage API is `SemanticResult`, because later optimized stages should not be forced to expose the baseline object graph.
+## Implementations
 
-## Stage Roadmap
+`reference/sequential_oracle` is the test oracle. It processes one record at a time with ordinary owning C++ objects and no worker coordination. It exists to make semantic regressions easier to debug, not as an article-facing throughput stage.
+
+`solutions/01_parallel_batched` is the competent baseline. It uses worker threads, a bounded queue, explicit backpressure, batch work items, preserved output ordering, conventional owning record objects, and general heap allocation. Queue entries own a vector of encoded records, so this stage batches coordination without introducing borrowed input lifetime rules.
+
+`solutions/02_lifetime_optimized` keeps the same external contract and batch boundary, then changes data movement and lifetime. Queue entries carry input index ranges, workers own reusable scratch state, temporary normalized strings can be allocated from a batch-reset `std::pmr::monotonic_buffer_resource`, and canonical output remains owning because it must survive the batch.
 
 ```mermaid
-flowchart TB
-    base[baseline<br/>ordinary owning C++]
-    reserve[reserved<br/>same ownership, planned capacity]
-    pmr[pmr<br/>standard polymorphic allocation]
-    arena[arena<br/>project-owned monotonic resource]
-    future[future representation stages<br/>views, compact layouts, reuse]
+flowchart LR
+    oracle[sequential oracle]
+    batched[01_parallel_batched<br/>owning batches]
+    optimized[02_lifetime_optimized<br/>borrowed ranges and scratch]
 
-    base --> reserve
-    reserve --> pmr
-    pmr --> arena
-    arena --> future
+    oracle --> tests[Equivalence tests]
+    batched --> tests
+    optimized --> tests
+    batched --> optimized
 ```
-
-The sequence isolates variables:
-
-- `baseline` establishes readable, idiomatic behaviour.
-- `reserved` asks how much obvious capacity planning helps without changing ownership.
-- `pmr` asks what batch-lifetime allocation changes when containers remain familiar.
-- `arena` asks whether a project-owned resource gives different behaviour from standard PMR machinery.
-- Future representation stages should change only one major variable at a time.
 
 ## Measured Region
 
-The scenario runner constructs the reference data and generated input before measurement. The measured region contains only stage processing and checksum construction.
+Benchmark executables construct deterministic input and immutable reference data before the timed region. The timed region includes decode, normalization, enrichment, financial calculations, validation, canonical output construction, checksum protection, allocation effects, and any queue or worker coordination used by that implementation.
 
 ```mermaid
 flowchart LR
-    setup[Unmeasured setup<br/>reference data and generated batch]
-    start[Start allocation/timer scope]
-    work[Measured stage work<br/>decode, validate, normalize, enrich, output, checksum]
+    setup[Unmeasured setup<br/>generate records and reference data]
+    start[Start timer and allocation scope]
+    work[Measured implementation work]
     stop[Stop timer and allocation scope]
     report[Print metrics]
 
@@ -119,21 +78,6 @@ flowchart LR
 
 ## Benchmark Integrity
 
-The architecture exists to protect benchmark integrity. The same generated input, reference data, validation rules, normalization rules, and checksum rules must be used by every stage.
+The comparison is valid only while input bytes, reference data, normalization rules, validation rules, financial formulas, canonical output, and checksum semantics remain equivalent. A faster implementation that changes the checksum is a failed implementation, not a performance result.
 
-```mermaid
-flowchart TB
-    same[Must remain identical]
-    same --> input[encoded input bytes]
-    same --> reference[reference data]
-    same --> rules[validation and normalization rules]
-    same --> checksum[checksum semantics]
-    same --> counts[observable result counts]
-
-    variable[May vary by stage]
-    variable --> allocation[allocation strategy]
-    variable --> ownership[ownership model]
-    variable --> layout[data layout]
-    variable --> reuse[batch-local reuse/reset]
-```
-
+The article should not argue that batching is surprising. The baseline is already batched. The central question is what remains after parallelism and batching are present: copying, temporary ownership, allocator behaviour, cache locality, and lifetime boundaries.

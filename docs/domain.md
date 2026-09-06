@@ -1,178 +1,91 @@
 # Domain Model
 
-The project models a high-throughput business document pipeline. The workload is intentionally similar to a narrow Flink job: encoded business documents arrive in batches, each document is decoded, validated, normalized, enriched from immutable reference data, and emitted as normalized output plus an audit trail.
+The project models a local financial-record transform. Encoded company financial records are decoded, normalized, enriched from immutable reference data, checked for accounting validity, classified, and emitted as canonical records with a stable checksum. External infrastructure is intentionally absent in the current architecture so the measurements focus on representation, ownership, allocation, batching, and worker coordination inside one process.
 
-The project does not model distributed execution, external connectors, checkpointing, networking, or storage. That boundary is deliberate. The article studies what happens when the transform is narrow enough to own inside one process and the main engineering question becomes data representation, ownership, allocation, and lifetime.
+## Financial Record
 
-## Why Not Flink?
+Each input record contains a compact but realistic subset of company financial data:
 
-Flink, Spark, Beam, and similar systems are the right tools when the system needs distributed execution, operational connectors, event-time windows, checkpointing, recovery, cluster elasticity, and mature runtime controls. This project is not a replacement for that class of system.
+- company identifier, legal name, address, postal code, country, currency, industry, and reporting period;
+- revenue, operating profit, net income, current assets, current liabilities, total assets, total debt, shareholder equity, previous revenue, and previous profit;
+- malformed or missing values generated deterministically so validation and exceptional paths are measured consistently.
 
-The custom C++ pipeline represents a different corner of the design space. It is plausible when input already arrives in bounded batches, reference data fits in memory, the transform is stable, deterministic replay is sufficient, deployment needs a small native component, or infrastructure cost and per-core efficiency matter more than distributed flexibility.
-
-The article should therefore avoid the claim that C++ is categorically better than a stream processor. The more precise claim is that general stream processors optimize for distributed correctness and operational flexibility, while this project studies a fixed business transform with aggressive control over memory lifetime inside one process.
-
-```mermaid
-flowchart TB
-    question{Which problem is this?}
-    question --> distributed[Distributed stream processing]
-    question --> local[Fixed local transform]
-
-    distributed --> flink[Flink or similar runtime]
-    flink --> connectors[Connectors and external systems]
-    flink --> checkpointing[Checkpointing and recovery]
-    flink --> windows[Event-time windows]
-    flink --> elasticity[Cluster elasticity]
-
-    local --> cpp[Custom C++ pipeline]
-    cpp --> bounded[Bounded encoded batches]
-    cpp --> memory[Reference data fits in memory]
-    cpp --> deterministic[Deterministic replay and checksum]
-    cpp --> lifetime[Explicit ownership and lifetime design]
-    cpp --> cost[Low overhead per core or edge deployment]
-```
-
-## Business Documents
-
-Each generated record is an encoded business document. It contains stable scalar fields, business identity, nested collections, and payload fragments. The encoding is intentionally simple because external I/O and wire-format parsing are not the subject of the first article.
+The wire representation is shared through `financial::common::EncodedRecord`. The three solutions may decode it into different internal shapes, but they must apply the same business rules and produce equivalent `financial::common::CanonicalRecord` output.
 
 ```mermaid
 classDiagram
-    class EncodedBatch {
-        WorkloadConfig config
-        vector~EncodedEvent~ events
-        size_t total_bytes
+    class EncodedRecord {
+        vector~byte~ payload
     }
 
-    class EncodedEvent {
-        string bytes
+    class RawFinancialRecord {
+        uint64 sequence
+        string company_id
+        string legal_name
+        string address
+        string postal_code
+        string country_code
+        string currency_code
+        string industry_code
+        string reporting_period
+        optional money fields
     }
 
-    class DecodedEvent {
-        uint64 event_id
-        uint32 source_id
-        uint64 timestamp_ns
-        EventType event_type
-        string company_name
-        string jurisdiction
-        identifiers[]
-        addresses[]
-        attributes[]
-        relationships[]
-        payload_fragments[]
-    }
-
-    class NormalizedRecord {
-        canonical_company_name
-        jurisdiction_id
-        primary_external_id
-        category_code
-        normalized_addresses[]
-        normalized_attributes[]
-        relationship_refs[]
-        payload_digest
+    class CanonicalRecord {
+        normalized company and address
+        country and region
+        currency decimals
+        industry name
+        fixed-point financial ratios
         validation_flags
+        risk_class
     }
 
-    class AuditRecord {
-        event_id
-        source_id
-        accepted
-        validation_errors[]
-        normalization_actions[]
-        reference_lookup_hits
-        payload_checksum
-    }
-
-    EncodedBatch "1" --> "*" EncodedEvent
-    EncodedEvent --> DecodedEvent : decode
-    DecodedEvent --> NormalizedRecord : normalize
-    DecodedEvent --> AuditRecord : validate/audit
+    EncodedRecord --> RawFinancialRecord : decode
+    RawFinancialRecord --> CanonicalRecord : normalize / enrich / classify
 ```
 
 ## Reference Data
 
-Reference data is immutable for the duration of a pipeline run. It models application-lifetime data that would normally come from configuration, a database snapshot, or a broadcast state source in a distributed runtime.
-
-Current reference data includes:
-
-- jurisdiction code to jurisdiction id;
-- source system id to category code;
-- company-name aliases used during normalization.
+Reference data has application lifetime and is immutable during a run. It contains country names and regions, canonical country currencies, currency decimal conventions, industry names, industry risk coefficients, and country risk coefficients. The oracle reads it directly, and the visible parallel implementations share it safely because no stage mutates it.
 
 ```mermaid
 flowchart LR
-    decoded[Decoded document] --> jurisdiction[Jurisdiction lookup]
-    decoded --> category[Source category lookup]
-    decoded --> alias[Company alias lookup]
-
+    raw[Raw financial record]
     ref[(Immutable reference data)]
-    ref --> jurisdiction
-    ref --> category
-    ref --> alias
-
-    jurisdiction --> normalized[Normalized record]
-    category --> normalized
-    alias --> normalized
-    jurisdiction --> audit[Audit record]
-    category --> audit
-    alias --> audit
+    raw --> country[Country lookup]
+    raw --> currency[Currency lookup]
+    raw --> industry[Industry lookup]
+    ref --> country
+    ref --> currency
+    ref --> industry
+    country --> canonical[Canonical record]
+    currency --> canonical
+    industry --> canonical
 ```
 
-## Processing Semantics
+## Business Semantics
 
-Every implementation stage must perform the same business work:
+Every solution performs the same observable work:
 
-1. Decode the deterministic encoded document.
-2. Validate required fields.
-3. Normalize selected text values.
-4. Enrich from immutable reference data.
-5. Construct normalized records.
-6. Construct audit records.
-7. Compute a stable checksum.
-8. Release or reset batch-local state.
+1. Decode encoded input bytes into record fields.
+2. Normalize company-name whitespace and casing, address whitespace, common street abbreviations, postal-code formatting, and country/currency/industry codes.
+3. Enrich from immutable country, currency, and industry data.
+4. Compute operating margin, net margin, current ratio, debt-to-equity, return on assets, revenue growth, profit growth, and a transparent composite risk class.
+5. Mark missing, unknown, non-finite, negative, zero-denominator, and inconsistent accounting values explicitly.
+6. Emit canonical records and compute a stable checksum.
 
-```mermaid
-sequenceDiagram
-    participant Batch as Encoded batch
-    participant Stage as Pipeline stage
-    participant Ref as Reference data
-    participant Norm as Normalized output
-    participant Audit as Audit output
-    participant Sum as Checksum
-
-    Batch->>Stage: encoded document bytes
-    Stage->>Stage: decode fields and nested lists
-    Stage->>Stage: validate required fields
-    Stage->>Stage: normalize text and identifiers
-    Stage->>Ref: lookup jurisdiction/category/alias
-    Ref-->>Stage: immutable enrichment values
-    Stage->>Norm: append normalized record
-    Stage->>Audit: append audit record
-    Norm->>Sum: observable fields
-    Audit->>Sum: observable audit facts
-```
+Ratios are rounded into fixed-point basis points in the canonical output. This keeps equivalence testing deliberate instead of relying on accidental text formatting of floating-point values.
 
 ## Lifetime Categories
 
-The lifetime model is central to the article. Later stages are allowed to change internal representation only when they preserve these boundaries.
+The implementation and article distinguish these lifetimes:
 
-```mermaid
-flowchart TB
-    app[Application lifetime<br/>immutable reference data]
-    input[Input-buffer lifetime<br/>encoded batch bytes]
-    temp[Temporary parse/validation lifetime<br/>decoded fragments and scratch values]
-    batch[Batch lifetime<br/>normalized and audit records]
-    output[Output lifetime<br/>records that survive commit]
-    irregular[Irregular lifetime<br/>exceptions and rare independent objects]
+- immutable application-lifetime reference data;
+- input-buffer lifetime for encoded records;
+- temporary parsing and validation data;
+- batch-lifetime normalized strings and scratch state in the lifetime-optimized solution;
+- canonical output that must survive the batch for checksum and comparison;
+- exceptional objects with irregular independent lifetimes.
 
-    app --> temp
-    input --> temp
-    temp --> batch
-    batch --> output
-    temp --> irregular
-    batch --> irregular
-```
-
-Borrowed memory must identify its owner and lifetime boundary. No stage may rely on dangling `std::string_view`, `std::span`, pointer, or index assumptions.
-
+Borrowed memory must identify its owner and lifetime boundary. No `std::string_view`, `std::span`, raw pointer, or index may survive the storage it depends on.

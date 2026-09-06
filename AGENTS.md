@@ -16,7 +16,7 @@ The project must preserve negative and surprising results. Do not force arenas, 
 - Keep benchmark code separate from core domain logic.
 - Every implementation stage must perform equivalent business work and produce deterministic, verifiable results.
 - Do not change multiple major variables in one benchmark stage.
-- Avoid concurrency, lock-free queues, SIMD, networking, and external I/O in the initial article project.
+- Avoid lock-free queues, SIMD, networking, and external I/O in the initial article project.
 
 ## Current Build Commands
 
@@ -34,13 +34,15 @@ cmake --build --preset msvc-release
 ctest --preset msvc-release
 ```
 
-## Benchmark And Scenario Commands
+## Benchmark Commands
 
 ```powershell
-.\build\default\bin\throughput_scenario.exe
+.\build\default\bin\financial_oracle_benchmark.exe 10000
+.\build\default\bin\financial_parallel_batched_benchmark.exe 10000 4 32 64
+.\build\default\bin\financial_lifetime_optimized_benchmark.exe 10000 4 32 64 arena
 ```
 
-The scenario runner is not a substitute for a full benchmark suite. It exists first to prove deterministic execution, output checksums, allocation instrumentation, and measured-region boundaries.
+These benchmark executables are not a substitute for full article-grade measurement. They exist first to prove deterministic execution, output checksums, allocation instrumentation, and measured-region boundaries.
 
 ## Benchmark Integrity Rules
 
@@ -71,7 +73,7 @@ Each stage must:
 - accept the same encoded batch representation;
 - use the same immutable reference data;
 - apply the same validation and normalization rules;
-- emit behaviourally equivalent normalized and audit results;
+- emit behaviourally equivalent canonical results;
 - produce the same stable checksum for equivalent workload parameters;
 - expose allocation and timing observations without changing business semantics.
 

@@ -1,26 +1,22 @@
 flowchart TB
-    input[EncodedBatch]
-    ref[ReferenceData]
-    baseline[baseline]
-    reserved[reserved]
-    pmr[pmr]
-    arena[arena]
-    semantic[SemanticResult<br/>counts and checksum]
+    input[Same encoded financial records]
+    ref[Same immutable reference data]
+    oracle[sequential oracle<br/>correctness reference]
+    batched[01_parallel_batched<br/>owning batch queue]
+    optimized[02_lifetime_optimized<br/>borrowed ranges and scratch]
+    canonical[Canonical records<br/>stable checksum]
+    benches[Financial benchmarks]
     tests[CTest equivalence tests]
-    scenario[Scenario runner]
 
-    input --> baseline
-    input --> reserved
-    input --> pmr
-    input --> arena
-    ref --> baseline
-    ref --> reserved
-    ref --> pmr
-    ref --> arena
+    input --> oracle
+    input --> batched
+    input --> optimized
+    ref --> oracle
+    ref --> batched
+    ref --> optimized
 
-    baseline --> semantic
-    reserved --> semantic
-    pmr --> semantic
-    arena --> semantic
-    semantic --> tests
-    semantic --> scenario
+    oracle --> canonical
+    batched --> canonical
+    optimized --> canonical
+    canonical --> tests
+    canonical --> benches

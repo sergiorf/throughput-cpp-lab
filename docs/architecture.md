@@ -1,57 +1,28 @@
 # Architecture Notes
 
-The project models a batch-oriented event-normalization service. External I/O is intentionally absent so measurements focus on application-level processing and memory behaviour.
+The current architecture is a two-stage financial-record comparison with a sequential oracle. The old event-normalization experiment and the earlier three-visible-stage progression have been removed from the active build and documentation.
 
-See also:
+## Boundary
 
-- [Domain model](domain.md) for the business document framing and Flink-like boundary.
-- [Software architecture](software-architecture.md) for source layout, stage contracts, and diagrams.
-- [Testing and verification](testing.md) for build, test, scenario, and equivalence checks.
+The project studies an in-process C++ transform. It does not require Kafka, databases, network services, storage engines, or kernel-level I/O. That boundary keeps the initial article focused on application-level costs: decoding, normalization, immutable lookups, numerical work, allocation, copying, queueing, worker ownership, and batch lifetime.
 
-## Semantic Contract
+## Visible Solution Progression
 
-The stable layer defines the encoded input batch, immutable reference data, validation and normalization semantics, and observable result contract. Optimized stages may use different internal storage, but they must produce the same normalized record count, audit record count, and stable checksum for equivalent workload parameters.
+The article-facing progression is:
 
-The current cross-stage contract is `throughput::SemanticResult`. It intentionally records observable behaviour rather than exposing a required concrete record layout. This keeps later stages free to use owning strings, borrowed views, PMR containers, arena-owned objects, or denser layouts without changing the business result.
+1. `01_parallel_batched`: parallel workers, bounded batch queue, ordinary owning records, ordinary heap allocation, and preserved output ordering.
+2. `02_lifetime_optimized`: the same business contract and batch boundary, with borrowed input ranges, worker-local mutable state, optional batch-reset PMR scratch, and reduced queue payload movement.
 
-## Pipeline
+`reference/sequential_oracle` remains outside this progression. It provides a simple correctness baseline for tests.
 
-Each stage performs the same business work:
+## Ownership
 
-1. decode deterministic encoded input events;
-2. validate required fields;
-3. normalize identifiers and selected text values;
-4. enrich from immutable reference data;
-5. construct normalized output records;
-6. construct audit records;
-7. compute a stable batch checksum;
-8. release or reset batch-scoped state.
+The shared workload owns the encoded input bytes. The oracle decodes each record into owning strings and emits owning canonical records.
 
-## Lifetime Categories
+The parallel batched baseline queues owning batches. Each queue item contains copied encoded records and an output start index. Workers decode those owned records into conventional intermediate objects and write canonical records into stable output slots.
 
-Application lifetime contains immutable reference data: jurisdictions, source systems, event types, aliases, and category mappings.
+The lifetime-optimized solution queues only input index ranges. The encoded records remain owned by the caller for the duration of `process_records`. Worker-local scratch owns temporary batch data, and canonical output is copied into ordinary owning records at the boundary where it must survive for checksumming and comparison.
 
-Input-buffer lifetime contains encoded batch bytes. Later stages may borrow from this buffer when safe.
+## Current Limitations
 
-Temporary parsing and validation lifetime contains decoded fragments, scratch strings, and validation state.
-
-Batch lifetime contains normalized records and detailed audit records that do not escape the batch.
-
-Output lifetime contains selected records that survive commit.
-
-Irregular lifetime contains exceptional objects whose ownership cannot be predicted cleanly.
-
-## Stage Structure
-
-The baseline is intentionally ordinary C++ rather than a straw man. It uses owning `std::string` and `std::vector` members in decoded, normalized, and audit records. This creates many independent allocations, but the design is clear, safe, and maintainable.
-
-The baseline establishes behavioural semantics for all later stages.
-
-The initial source structure contains four stages:
-
-1. `baseline`: ordinary owning C++ records with straightforward parsing and normalization.
-2. `reserved`: the same owning representation, but with predictable nested container capacity reserved from encoded delimiter counts.
-3. `pmr`: PMR strings and vectors backed by a batch-scoped `std::pmr::monotonic_buffer_resource`.
-4. `arena`: the same PMR-aware pipeline backed by a project-owned monotonic memory resource with a fixed local buffer and upstream fallback.
-
-The reserved stage isolates capacity planning from allocator strategy. The PMR stage isolates standard allocator/lifetime control from custom arena design. The custom arena stage exists as an implementation experiment, not as an assumed winner.
+The benchmark executables are smoke-grade. They report throughput, bytes, checksum, allocation counts, and solution-specific queue observations, but article-grade results still need repeated samples, environment metadata, latency distributions, and a workload matrix.
