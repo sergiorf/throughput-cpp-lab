@@ -2,7 +2,18 @@
 
 This repository supports a C++ implementation and technical article about designing data, ownership, and memory lifetime around a high-throughput workload.
 
-The project models an in-memory event-normalization and audit service. It generates deterministic encoded business events, processes them through equivalent pipeline stages, and records correctness and measurement evidence.
+The project models a financial-record service. Deterministic encoded company financial records are decoded, normalized, enriched from immutable reference data, classified, encoded into canonical results, and measured under multiple architectures.
+
+The current refactor keeps the three comparison solutions separated under `solutions/`:
+
+| Concern | Sequential | Parallel | Throughput-oriented |
+| --- | --- | --- | --- |
+| Work unit | One record | One record | Planned batch |
+| Allocation | General heap | General heap | Planned worker-local reusable memory |
+| Coordination | None | Bounded per-record queue | Planned amortized batch queueing |
+| Representation | Owning objects | Owning objects | Planned hybrid, lifetime-oriented layout |
+| Reference data | Immutable | Shared immutable | Planned cache-conscious immutable lookup |
+| I/O | Record-oriented payloads | Record-oriented payloads | Planned buffered or batched boundary |
 
 ## Build Instructions
 
@@ -36,6 +47,26 @@ Visual Studio preset:
 .\build\msvc\bin\Release\throughput_scenario.exe
 ```
 
+## Run The Financial Solutions
+
+Default preset:
+
+```powershell
+.\build\default\bin\financial_seq.exe
+.\build\default\bin\financial_seq_benchmark.exe 10000
+.\build\default\bin\financial_par.exe
+.\build\default\bin\financial_par_benchmark.exe 10000 4 256
+```
+
+Visual Studio preset:
+
+```powershell
+.\build\msvc\bin\Release\financial_seq.exe
+.\build\msvc\bin\Release\financial_seq_benchmark.exe 10000
+.\build\msvc\bin\Release\financial_par.exe
+.\build\msvc\bin\Release\financial_par_benchmark.exe 10000 4 256
+```
+
 ## Documentation
 
 - [Domain model](docs/domain.md) explains the business document pipeline, the Flink-like boundary, reference data, and lifetime model.
@@ -43,18 +74,16 @@ Visual Studio preset:
 - [Testing and verification](docs/testing.md) explains how to build, test, run the scenario, and interpret failures.
 - [Benchmark methodology](docs/benchmark-methodology.md) defines measured and unmeasured work.
 - [Results](docs/results.md) is reserved for accepted evidence.
+- [Implementation plan](docs/implementation-plan.md) describes the target separated-solution structure.
+- [Article draft](article/engineering-cpp-for-extreme-throughput.md) tracks verified observations while evidence is gathered.
 
 ## Current Status
 
 Implemented:
 
-- deterministic workload generation;
-- immutable reference data;
-- idiomatic C++ baseline;
-- semantic result contract for cross-stage equivalence;
-- baseline, reserved, PMR, and custom arena stage entry points;
-- stable checksums;
-- allocation instrumentation;
-- stage equivalence tests.
+- shared financial wire format, deterministic workload generation, reference fixtures, checksums, and allocation instrumentation;
+- `solutions/01_sequential`, a conventional owning record-at-a-time pipeline;
+- `solutions/02_parallel`, a conventional worker-thread pipeline with bounded queue backpressure and order-preserving output;
+- equivalence tests showing the parallel solution produces the same canonical records and checksum as the sequential solution.
 
-Later stages can cover copy reduction, reuse, and data layout without changing the stable business semantics.
+The throughput-oriented batch architecture and socket boundary remain to be implemented. Final performance claims are intentionally deferred until repeated release-mode measurements are collected.

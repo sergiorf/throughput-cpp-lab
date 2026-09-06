@@ -35,7 +35,9 @@ The initial scenario runner reports:
 - audit output count;
 - checksum.
 
-Future benchmark work will add repeated samples, median, p95, p99, peak resident memory where reliable, retained memory after reset, and workload matrix reporting.
+The separated financial benchmarks report the same core fields plus solution-specific coordination observations. `financial_par_benchmark` additionally reports worker count, queue capacity, maximum queue occupancy, producer waits, consumer waits, and accumulated wait time.
+
+Future benchmark work will add repeated samples, median, p95, p99, peak resident memory where reliable, retained memory after reset, worker utilization, and workload matrix reporting.
 
 ## Validity Notes
 
